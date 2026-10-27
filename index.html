@@ -833,7 +833,7 @@
   // Alternatif: sediakan window.NGULEMIN_CONFIG sebelum modul ini dijalankan.
   const SUPABASE_URL = (window.NGULEMIN_CONFIG?.url || "https://jzgcyhyrcqvpakevtfgg.supabase.co").trim();
   const SUPABASE_ANON_KEY = (window.NGULEMIN_CONFIG?.anonKey || "sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu").trim();
-  const STORAGE_BUCKET = "ngulemin-media";
+  const STORAGE_BUCKET = "postgresql://postgres:[YOUR-PASSWORD]@db.jzgcyhyrcqvpakevtfgg.supabase.co:5432/postgres";
 
   let supabase = null;
   const hasSupabaseConfig = SUPABASE_URL.startsWith('https://') &&
