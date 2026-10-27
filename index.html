@@ -838,10 +838,10 @@
   let supabase = null;
   const hasSupabaseConfig = SUPABASE_URL.startsWith('https://') &&
     SUPABASE_ANON_KEY.length > 20 &&
-    !SUPABASE_URL.includes('https://ptecufdkkpznhegclbxa.supabase.co') &&
-    !SUPABASE_ANON_KEY.includes('sb_publishable_v65ttmLO9Hicw5booaBMGQ_2frfWo5Q');
+    !SUPABASE_URL.includes('URL_SUPABASE_ANDA') &&
+    !SUPABASE_ANON_KEY.includes('ANON_KEY_ANDA');
   if (!IS_PREVIEW && hasSupabaseConfig) {
-    supabase = createClient(https://ptecufdkkpznhegclbxa.supabase.co, sb_publishable_v65ttmLO9Hicw5booaBMGQ_2frfWo5Q, {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
   }
@@ -1219,7 +1219,10 @@
     ].forEach(k => localStorage.removeItem(k));
 
     if (!supabase) {
-      showToast('Peringatan: SUPABASE_URL & SUPABASE_ANON_KEY belum dikonfigurasi.', 'error');
+      // Fallback presentasi: situs tetap menampilkan konten contoh jika konfigurasi Supabase belum diisi.
+      // Perubahan tidak akan tersimpan ke database sampai URL dan anon/publishable key yang benar dipasang.
+      state.db = JSON.parse(JSON.stringify(PREVIEW_ONLY_DUMMY_DATA));
+      showToast('Mode demo aktif: konten contoh ditampilkan. Isi URL dan anon key Supabase agar data tersimpan permanen.', 'error');
       return;
     }
 
@@ -1261,40 +1264,51 @@
         supabase.from('orders').select('*').order('created_at', { ascending: false })
       ]);
 
-      // Tetapkan hasil dari Supabase apa adanya (meskipun kosong [] karena sudah dihapus oleh Admin!)
-      if (resSettings.data && resSettings.data.length > 0) {
-        state.db.site_settings = { ...DEFAULT_SITE_SETTINGS, ...resSettings.data[0] };
-      } else if (state.currentUser) {
-        await supabase.from('site_settings').upsert([DEFAULT_SITE_SETTINGS]);
+      // Jika tabel belum diisi atau query gagal (mis. SQL/RLS belum disiapkan), tampilkan data demo.
+      // Pesanan tidak pernah dibuat-buat. Setelah database memiliki data, data Supabase selalu diprioritaskan.
+      const demo = PREVIEW_ONLY_DUMMY_DATA;
+      const queryErrors = [resSettings, resSocials, resCategories, resThemes, resPricing, resFeatures, resTesti, resSteps, resFaqs, resOrders]
+        .filter(r => r?.error).map(r => r.error.message);
+      if (queryErrors.length) console.error('Kesalahan query Supabase:', queryErrors);
+
+      // Saat admin pertama kali masuk, simpan data contoh ke tabel yang benar-benar kosong.
+      // Ini membuat edit/hapus berikutnya bekerja pada baris database, bukan hanya tampilan sementara.
+      if (state.currentUser) {
+        const seedIfEmpty = async (result, table, rows) => {
+          if (!result?.error && Array.isArray(result?.data) && result.data.length === 0 && rows?.length) {
+            const { error } = await supabase.from(table).upsert(rows);
+            if (error) console.warn(`Data contoh ${table} belum dapat disimpan:`, error.message);
+          }
+        };
+        await Promise.all([
+          seedIfEmpty(resSocials, 'social_links', demo.social_links),
+          seedIfEmpty(resCategories, 'theme_categories', demo.theme_categories),
+          seedIfEmpty(resThemes, 'themes', demo.themes),
+          seedIfEmpty(resPricing, 'pricing_plans', demo.pricing_plans),
+          seedIfEmpty(resFeatures, 'features', demo.features),
+          seedIfEmpty(resTesti, 'testimonials', demo.testimonials),
+          seedIfEmpty(resSteps, 'order_steps', demo.order_steps),
+          seedIfEmpty(resFaqs, 'faqs', demo.faqs)
+        ]);
       }
 
-      if (Array.isArray(resSocials.data)) {
-        state.db.social_links = resSocials.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1));
+      state.db.site_settings = resSettings.data?.length
+        ? { ...DEFAULT_SITE_SETTINGS, ...resSettings.data[0] }
+        : { ...DEFAULT_SITE_SETTINGS, ...(state.currentUser ? {} : demo.site_settings) };
+      if (!resSettings.data?.length && state.currentUser && !resSettings.error) {
+        const { error: settingsInsertError } = await supabase.from('site_settings').upsert([DEFAULT_SITE_SETTINGS]);
+        if (settingsInsertError) console.warn('Pengaturan default belum tersimpan:', settingsInsertError.message);
       }
-      if (Array.isArray(resCategories.data)) {
-        state.db.theme_categories = resCategories.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1));
-      }
-      if (Array.isArray(resThemes.data)) {
-        state.db.themes = sortThemesByTableOrder(resThemes.data);
-      }
-      if (Array.isArray(resPricing.data)) {
-        state.db.pricing_plans = resPricing.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1));
-      }
-      if (Array.isArray(resFeatures.data)) {
-        state.db.features = resFeatures.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1));
-      }
-      if (Array.isArray(resTesti.data)) {
-        state.db.testimonials = resTesti.data;
-      }
-      if (Array.isArray(resSteps.data)) {
-        state.db.order_steps = resSteps.data.sort((a, b) => (a.step_number || 1) - (b.step_number || 1));
-      }
-      if (Array.isArray(resFaqs.data)) {
-        state.db.faqs = resFaqs.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1));
-      }
-      if (Array.isArray(resOrders.data)) {
-        state.db.orders = resOrders.data;
-      }
+      state.db.social_links = resSocials.data?.length ? resSocials.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1)) : (resSocials.error || !resSocials.data || resSocials.data.length === 0 ? demo.social_links : []);
+      state.db.theme_categories = resCategories.data?.length ? resCategories.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1)) : (resCategories.error || !resCategories.data || resCategories.data.length === 0 ? demo.theme_categories : []);
+      state.db.themes = resThemes.data?.length ? sortThemesByTableOrder(resThemes.data) : (resThemes.error || !resThemes.data || resThemes.data.length === 0 ? demo.themes : []);
+      state.db.pricing_plans = resPricing.data?.length ? resPricing.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1)) : (resPricing.error || !resPricing.data || resPricing.data.length === 0 ? demo.pricing_plans : []);
+      state.db.features = resFeatures.data?.length ? resFeatures.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1)) : (resFeatures.error || !resFeatures.data || resFeatures.data.length === 0 ? demo.features : []);
+      state.db.testimonials = resTesti.data?.length ? resTesti.data : (resTesti.error || !resTesti.data || resTesti.data.length === 0 ? demo.testimonials : []);
+      state.db.order_steps = resSteps.data?.length ? resSteps.data.sort((a, b) => (a.step_number || 1) - (b.step_number || 1)) : (resSteps.error || !resSteps.data || resSteps.data.length === 0 ? demo.order_steps : []);
+      state.db.faqs = resFaqs.data?.length ? resFaqs.data.sort((a, b) => (a.sort_order || 1) - (b.sort_order || 1)) : (resFaqs.error || !resFaqs.data || resFaqs.data.length === 0 ? demo.faqs : []);
+      state.db.orders = Array.isArray(resOrders.data) ? resOrders.data : [];
+      if (queryErrors.length) showToast('Sebagian data Supabase gagal dibaca. Konten contoh ditampilkan; cek Console dan jalankan SQL setup.', 'error');
     } catch (err) {
       console.error('Supabase fetch error:', err);
       showToast('Gagal memuat data dari Supabase: ' + err.message, 'error');
@@ -3122,7 +3136,7 @@
       }
 
       if (error || !data?.user) {
-        showToast('Login gagal: Email atau Password salah.', 'error');
+        showToast('Login gagal: ' + (error?.message || 'Email atau password tidak cocok.'), 'error');
         return;
       }
 
