@@ -831,17 +831,17 @@
   // KONFIGURASI SUPABASE UNTUK DEPLOY VERCEL (STATIC HTML)
   // Isi nilai ini dengan Project URL dan publishable/anon key dari Supabase.
   // Alternatif: sediakan window.NGULEMIN_CONFIG sebelum modul ini dijalankan.
-  const SUPABASE_URL = (window.NGULEMIN_CONFIG?.url || "https://jzgcyhyrcqvpakevtfgg.supabase.co").trim();
-  const SUPABASE_ANON_KEY = (window.NGULEMIN_CONFIG?.anonKey || "sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu").trim();
-  const STORAGE_BUCKET = "postgresql://postgres:[YOUR-PASSWORD]@db.jzgcyhyrcqvpakevtfgg.supabase.co:5432/postgres";
+  const SUPABASE_URL = (window.NGULEMIN_CONFIG?.url || "https://ptecufdkkpznhegclbxa.supabase.co").trim();
+  const SUPABASE_ANON_KEY = (window.NGULEMIN_CONFIG?.anonKey || "sb_publishable_v65ttmLO9Hicw5booaBMGQ_2frfWo5Q").trim();
+  const STORAGE_BUCKET = "ngulemin-media";
 
   let supabase = null;
   const hasSupabaseConfig = SUPABASE_URL.startsWith('https://') &&
     SUPABASE_ANON_KEY.length > 20 &&
-    !SUPABASE_URL.includes('https://jzgcyhyrcqvpakevtfgg.supabase.co') &&
-    !SUPABASE_ANON_KEY.includes('sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu');
+    !SUPABASE_URL.includes('https://ptecufdkkpznhegclbxa.supabase.co') &&
+    !SUPABASE_ANON_KEY.includes('sb_publishable_v65ttmLO9Hicw5booaBMGQ_2frfWo5Q');
   if (!IS_PREVIEW && hasSupabaseConfig) {
-    supabase = createClient(https://jzgcyhyrcqvpakevtfgg.supabase.co, sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu, {
+    supabase = createClient(https://ptecufdkkpznhegclbxa.supabase.co, sb_publishable_v65ttmLO9Hicw5booaBMGQ_2frfWo5Q, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
   }
