@@ -828,14 +828,22 @@
 
   // KONFIGURASI APLIKASI PRODUKSI
   const IS_PREVIEW = false; // Set false untuk Deployment Produksi (Hanya membaca data dari Supabase)
-  // PASTE SUPABASE URL & ANON KEY ANDA DI SINI
-  const SUPABASE_URL = "https://jzgcyhyrcqvpakevtfgg.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu";
-  const STORAGE_BUCKET = "ngulemin-media"; // Nama Bucket Penyimpanan Supabase Storage
+  // KONFIGURASI SUPABASE UNTUK DEPLOY VERCEL (STATIC HTML)
+  // Isi nilai ini dengan Project URL dan publishable/anon key dari Supabase.
+  // Alternatif: sediakan window.NGULEMIN_CONFIG sebelum modul ini dijalankan.
+  const SUPABASE_URL = (window.NGULEMIN_CONFIG?.url || "https://jzgcyhyrcqvpakevtfgg.supabase.co").trim();
+  const SUPABASE_ANON_KEY = (window.NGULEMIN_CONFIG?.anonKey || "sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu").trim();
+  const STORAGE_BUCKET = "ngulemin-media";
 
   let supabase = null;
-  if (!IS_PREVIEW && SUPABASE_URL.startsWith('http')) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const hasSupabaseConfig = SUPABASE_URL.startsWith('https://') &&
+    SUPABASE_ANON_KEY.length > 20 &&
+    !SUPABASE_URL.includes('https://jzgcyhyrcqvpakevtfgg.supabase.co') &&
+    !SUPABASE_ANON_KEY.includes('sb_publishable_xliJc1DTX-1fSIxntgHdXA_QDmlMGcu');
+  if (!IS_PREVIEW && hasSupabaseConfig) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
   }
 
   let themeSortableInstance = null;
@@ -1219,10 +1227,13 @@
       // 1. Cek Sesi Aktif Supabase Auth
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData?.session?.user) {
-        state.currentUser = {
-          role: 'admin',
-          data: sessionData.session.user
-        };
+        const { data: adminAllowed, error: adminCheckError } = await supabase.rpc('is_admin');
+        if (!adminCheckError && adminAllowed === true) {
+          state.currentUser = { role: 'admin', data: sessionData.session.user };
+        } else {
+          state.currentUser = null;
+          await supabase.auth.signOut();
+        }
       }
 
       // 2. Tarik Data Murni dari Tabel Supabase
@@ -3091,7 +3102,7 @@
       const submitBtn = document.getElementById('btn-submit-login');
 
       if (!supabase) {
-        showToast('Konfigurasi SUPABASE_URL & SUPABASE_ANON_KEY belum diisi!', 'error');
+        showToast('Konfigurasi Supabase belum diisi. Periksa SUPABASE_URL dan ANON_KEY di index.html.', 'error');
         return;
       }
 
@@ -3112,6 +3123,13 @@
 
       if (error || !data?.user) {
         showToast('Login gagal: Email atau Password salah.', 'error');
+        return;
+      }
+
+      const { data: adminAllowed, error: adminCheckError } = await supabase.rpc('is_admin');
+      if (adminCheckError || adminAllowed !== true) {
+        await supabase.auth.signOut();
+        showToast('Akun ini belum diberi akses admin. Tambahkan email ke tabel admin_users di Supabase.', 'error');
         return;
       }
 
